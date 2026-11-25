@@ -1,0 +1,273 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useMediaQuery } from '../utils/useMediaQuery';
+import { useTheme } from '../context/ThemeContext';
+import { motion } from 'framer-motion';
+import gsap from 'gsap';
+import { api } from '../utils/api';
+import { useRouter } from 'next/navigation';
+import {
+  Home,
+  BookOpen,
+  Search,
+  Users,
+  Camera,
+  Type,
+  Mic,
+  User,
+  Settings,
+  LogOut,
+  MessageSquare,
+  Trophy,
+  Menu,
+  X,
+  Sun,
+  Moon,
+  Hand,
+  Bell
+} from 'lucide-react';
+import { SettingsDialog } from './SettingsDialog';
+import { NotificationsDropdown } from './NotificationsDropdown';
+
+export function Sidebar() {
+  const { theme, toggleTheme } = useTheme();
+  const pathname = usePathname();
+  const router = useRouter();
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [userData, setUserData] = useState<any>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getNotifications()
+      .then((res) => { if (!cancelled) setUnreadCount(res.unread_count ?? 0); })
+      .catch(() => { });
+    const fetchUser = async () => {
+      try {
+        const [me, dashboard] = await Promise.all([
+          api.getMe(),
+          api.getDashboard().catch(() => null),
+        ]);
+        if (!cancelled) setUserData({ ...me, level: dashboard?.xp_info?.level });
+      } catch {
+        // 401 is handled by the API client (redirect to sign-in)
+      }
+    };
+    fetchUser();
+    return () => { cancelled = true; };
+  }, [pathname]);
+
+  // Respect the user's notification setting (and update live when it changes)
+  useEffect(() => {
+    api.getSettings().then((s) => setNotificationsEnabled(s.notifications_enabled)).catch(() => { });
+    const onSettings = (e: Event) => setNotificationsEnabled((e as CustomEvent).detail?.notifications_enabled ?? true);
+    window.addEventListener('signvista:settings', onSettings);
+    return () => window.removeEventListener('signvista:settings', onSettings);
+  }, []);
+
+  const navItems = [
+    { path: '/dashboard', icon: Home, label: 'Dashboard', gesture: '🏠' },
+    { path: '/profile', icon: User, label: 'Profile', gesture: '👤' },
+    { path: '/game', icon: Trophy, label: 'ISL Quiz Game', gesture: '🎮' },
+    { path: '/learning', icon: BookOpen, label: 'Learning Hub', gesture: '📚' },
+    { path: '/dictionary', icon: Search, label: 'ISL Dictionary', gesture: '🔎' },
+    { path: '/community', icon: Users, label: 'Community', gesture: '🤝' },
+    { path: '/translate', icon: Camera, label: 'AR Translate', gesture: '📸' },
+    { path: '/text', icon: Type, label: 'Text to Sign', gesture: '⌨️' },
+    { path: '/voice', icon: Mic, label: 'Voice to Sign', gesture: '🎙️' },
+    { path: '/chat', icon: MessageSquare, label: 'Messages', gesture: '💬' },
+  ];
+
+  const handleMobileToggle = () => {
+    setIsMobileOpen(!isMobileOpen);
+    if (!isMobileOpen) {
+      gsap.fromTo('.mobile-nav-item',
+        { x: -20, opacity: 0 },
+        { x: 0, opacity: 1, stagger: 0.1, duration: 0.4, ease: 'power2.out' }
+      );
+    }
+  };
+
+  return (
+    <>
+      {/* Mobile Toggle */}
+      <button
+        onClick={handleMobileToggle}
+        className="lg:hidden fixed top-4 left-4 z-50 p-3 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 hover:scale-105 transition-transform"
+      >
+        {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+      </button>
+
+      {/* Sidebar Desktop */}
+      <motion.aside
+        initial={false}
+        animate={{
+          width: isHovered || isMobileOpen ? 280 : 88,
+          x: isMobileOpen || isDesktop ? 0 : -280
+        }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className={`
+          fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 
+          z-40 overflow-hidden shadow-2xl transition-colors duration-500
+        `}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      >
+        <div className="flex flex-col h-full py-6 px-4">
+          {/* Logo Area */}
+          <div className="mb-10 flex items-center gap-4 px-2 overflow-hidden">
+            <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-[#105F68] to-[#3A9295] rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-0 transition-transform duration-300">
+              <Hand className="w-7 h-7 text-white" />
+            </div>
+            <motion.div
+              animate={{ opacity: (isHovered || isMobileOpen) ? 1 : 0, x: (isHovered || isMobileOpen) ? 0 : -20 }}
+              className="flex-shrink-0"
+            >
+              <h1 className="text-2xl font-black text-[#105F68] dark:text-[#63C1BB] tracking-tight whitespace-nowrap">SignVista</h1>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500 whitespace-nowrap">Real-Time Translation</span>
+            </motion.div>
+          </div>
+
+          {/* Nav Section */}
+          <nav className="flex-1 space-y-2">
+            {navItems.map((item) => {
+              const isActive = pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  href={item.path}
+                  onClick={() => setIsMobileOpen(false)}
+                  className={`
+                    group flex items-center gap-4 px-3.5 py-3.5 rounded-2xl transition-all duration-300 relative overflow-hidden
+                    ${isActive
+                      ? 'bg-gradient-to-r from-[#105F68] to-[#3A9295] text-white shadow-lg'
+                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-[#105F68] dark:hover:text-[#63C1BB]'}
+                  `}
+                >
+                  <item.icon className={`w-5 h-5 flex-shrink-0 transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
+                  <motion.span
+                    animate={{ opacity: (isHovered || isMobileOpen) ? 1 : 0, x: (isHovered || isMobileOpen) ? 0 : -10 }}
+                    className="font-semibold text-sm whitespace-nowrap"
+                  >
+                    {item.label}
+                  </motion.span>
+                  {isActive && (isHovered || isMobileOpen) && (
+                    <div className="absolute right-0 top-0 h-full w-1 bg-white opacity-20" />
+                  )}
+                  {!isActive && (isHovered || isMobileOpen) && (
+                    <span className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-lg">
+                      {item.gesture}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Footer Section */}
+          <div className="mt-auto space-y-4 pt-6 border-t border-gray-100 dark:border-gray-800">
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="w-full flex items-center gap-4 px-3.5 py-3.5 rounded-2xl bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-700 overflow-hidden"
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5 flex-shrink-0" /> : <Moon className="w-5 h-5 flex-shrink-0" />}
+              <motion.span
+                animate={{ opacity: (isHovered || isMobileOpen) ? 1 : 0, x: (isHovered || isMobileOpen) ? 0 : -10 }}
+                className="font-semibold text-sm whitespace-nowrap"
+              >
+                {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+              </motion.span>
+            </button>
+
+            {/* Top Row: Notifications & Settings */}
+            <div className="flex gap-2 w-full">
+              <button
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                className="flex-1 flex justify-center items-center py-3.5 rounded-2xl bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
+              >
+                <div className="relative">
+                  <Bell className="w-5 h-5 transition-transform hover:scale-110" />
+                  {notificationsEnabled && unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-900" aria-label={`${unreadCount} unread notifications`} />
+                  )}
+                </div>
+              </button>
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="flex-1 flex justify-center items-center py-3.5 rounded-2xl bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+              >
+                <Settings className="w-5 h-5 transition-transform hover:rotate-90 duration-300" />
+              </button>
+            </div>
+
+            {/* Profile Brief */}
+            <div
+              onClick={() => router.push('/profile')}
+              className="block focus:outline-none cursor-pointer group"
+            >
+              <div className="p-3 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-800/50 rounded-3xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden hover:border-[#105F68]/30 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 flex-shrink-0 rounded-full bg-[#105F68] flex items-center justify-center text-white font-bold shadow-inner">
+                    {userData?.name?.substring(0, 2).toUpperCase() || '··'}
+                  </div>
+                  <motion.div
+                    animate={{ opacity: (isHovered || isMobileOpen) ? 1 : 0, x: (isHovered || isMobileOpen) ? 0 : -10 }}
+                    className="flex-1 min-w-0"
+                  >
+                    <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate group-hover:text-[#105F68] transition-colors">{userData?.name || 'Loading…'}</p>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                      {userData?.level ? `Level ${userData.level} Signer` : 'SignVista Learner'}
+                    </p>
+                  </motion.div>
+                  {(isHovered || isMobileOpen) && (
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          await api.logout();
+                        } finally {
+                          router.replace('/auth');
+                        }
+                      }}
+                      className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-colors rounded-xl flex-shrink-0"
+                      title="Logout"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.aside>
+
+      {/* Popovers */}
+      <SettingsDialog
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
+      <NotificationsDropdown
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        onUnreadChange={setUnreadCount}
+      />
+
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 lg:hidden"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
+    </>
+  );
+}
